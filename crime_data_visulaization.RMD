@@ -1,0 +1,165 @@
+---
+title: "San Francisco Crime Insights "
+author: "Steven Oshry"
+date: "Sunday, March 21, 2016"
+output: html_document
+---
+## Introduction
+This is an analysis of crime data from the city of San Francisco between June 1, 2014 and August 31, 2014.  There were many different categories of crimes given,  I decided to restrict this analysis to violent crimes only.  The categories for violent crimes are assault and robbery.  Bar charts are shown looking at violent crime by Day of week, Time of day, and Time of Day within Day of week.  Finally a heat map is shown superimposed over a map of San Francisco to demonstrate the power of visula presentation of data. The code (R markdown) to create this analysis is in the Github repository <https://github.com/StevenOshry/Coursera_visualization_SF_crime-data>
+ 
+---
+
+
+
+```{r read_ext_data, cache=FALSE, echo=FALSE, message=FALSE}
+options( warn = -1)
+#suppressPackageStartupMessages(library("xtable")) 
+
+#suppressPackageStartupMessages(library(tcltk))
+
+suppressMessages(library(dplyr))
+suppressMessages(library(ggplot2))
+suppressMessages(library(lubridate))
+suppressMessages(library(maps))
+suppressMessages(library(ggplot2))
+suppressMessages(library(ggmap))
+suppressMessages(library(dplyr))
+
+
+
+
+setwd("~/Coursera/Uw_communicate_DS")
+
+SF_dat <- read.csv("Project_data/sanfrancisco_incidents_summer_2014.csv", header=TRUE,  stringsAsFactors = FALSE)
+# create rounded latitude and longitude
+
+
+SF_dat$X_avg<- as.numeric(round(SF_dat$X,2))
+SF_dat$Y_avg<- as.numeric(round(SF_dat$Y,2))
+
+
+
+
+
+# create summarized table for violent crimes counting violent crimes for the avg lat and avg longitude
+
+lat_long_tbl_violent <- as.data.frame(SF_dat %>%
+                                         filter(Category %in% c("ASSAULT","ROBBERY"))%>%
+                                         select( long=X_avg, lat=Y_avg) %>%
+                                         group_by (lat, long)  %>%
+                                         summarise(Frequency=n())
+)
+
+
+SF_dat$text_time <-paste(SF_dat$Time,":00",sep='')
+SF_dat$text_datetime <-paste(SF_dat$Date, SF_dat$text_time ,sep=' ')
+SF_dat$date2 <-mdy(SF_dat$Date)
+SF_dat$datetime<-mdy_hms(SF_dat$text_datetime)
+# initialize time bucket to NA
+SF_dat$tod_bucket <-NA
+SF_dat$time2 <-as.numeric(substr(SF_dat$Time,1,2))
+SF_dat <- within(SF_dat, {
+  tod_bucket[]<-"OTH"
+  tod_bucket[time2 >= 6 & time2<12 ] <- "A 6AM - 12PM"
+  tod_bucket[time2 >= 12 & time2<17 ] <- "B) 12PM - 5PM"
+  tod_bucket[time2 >= 17 & time2<21 ] <- "C) 5PM - 9PM"
+  tod_bucket[time2 >= 21 & time2<24 ] <- "D) 9PM - 12AM"
+  tod_bucket[time2 <6 ] <- "E) 12AM - 6AM"
+})
+SF_dat$wk_day<-wday(SF_dat$date2, label=TRUE)
+TOD_violent_tbl <- as.data.frame(SF_dat %>%
+                                        filter(Category %in% c("ASSAULT","ROBBERY"))%>%
+                                        select( tod_bucket,wk_day ) %>%
+                                        group_by (tod_bucket,wk_day )  %>%
+                                        summarise(Frequency=n())
+)
+
+
+
+
+
+
+
+```
+
+## Day of Week Chart
+
+
+The chart below shows the violent crimes by day of week.  There does not appear to be a strong realtionship.
+
+```{r DOW plots ,fig.height=7,fig.width=12, echo=FALSE, message=FALSE}
+
+
+x <- ggplot(data=TOD_violent_tbl, aes(x=wk_day  , y=Frequency))
+x <- x+ geom_bar(stat="identity", width=0.5, fill="blue")
+x<- x + ggtitle("San Francisco Violent Crime by Day of week")
+x<- x+ theme(plot.title = element_text(size=22, face="bold"))
+x<- x+theme(axis.title.x = element_text(face="bold", colour="black", size=18))
+x<- x+theme(axis.title.y = element_text(face="bold", colour="black", size=18))
+x <- x+ theme(text = element_text(face="bold", colour="black", size=18))
+x
+
+```
+
+
+## Time of Day Chart
+
+
+The chart below shows the violent crimes by Time of Day.  There also does not appear to be a strong realtionship.
+
+```{r TOD plots ,fig.height=7,fig.width=12, echo=FALSE, message=FALSE}
+
+
+w <- ggplot(data=TOD_violent_tbl, aes(x=tod_bucket  , y=Frequency))
+w <- w+ geom_bar(stat="identity", width=0.5, fill="red")
+w<- w + ggtitle("San Francisco Violent Crime by Time of day")
+w<- w+ theme(plot.title = element_text(size=22, face="bold"))
+w<- w+theme(axis.title.x = element_text(face="bold", colour="black", size=18))
+w<- w+theme(axis.title.y = element_text(face="bold", colour="black", size=18))
+w <- w+ theme(text = element_text(face="bold", colour="black", size=18))
+w
+
+
+```
+
+
+## Time of Day within Day of Week Chart
+
+
+The chart below shows the violent crimes by Time of Day within Day of Week.  Here we can see that violent crimes are more frequent Friday and Saturday evenings and very early Sunday mroning(12 Am - 6 AM )
+
+```{r TOD_DOW plots ,fig.height=7,fig.width=12, echo=FALSE, message=FALSE}
+
+
+y <- ggplot(data=TOD_violent_tbl, aes(x=wk_day  , y=Frequency, fill=tod_bucket))
+y <- y+ geom_bar(stat="identity", width=0.5)
+y<- y + ggtitle("San Francisco Violent Crime by Day of week and Time of day")
+y<- y+ theme(plot.title = element_text(size=22, face="bold"))
+y<- y+theme(axis.title.x = element_text(face="bold", colour="black", size=18))
+y<- y+theme(axis.title.y = element_text(face="bold", colour="black", size=18))
+y <- y+ theme(text = element_text(face="bold", colour="black", size=18))
+Y <- y+scale_fill_brewer(palette="blues")
+y
+
+```
+
+## Heat Map Results 
+
+
+The chart below is a violent crime map of San Fran. This visualization clearly shows that most of the violent crime is
+concentrated in 1 area
+
+```{r scatter plots ,fig.height=7,fig.width=12, echo=FALSE, message=FALSE}
+
+
+sf_map <- get_map(location = 'san francisco', zoom = 13)
+ 
+ 
+z <- ggmap(sf_map) + geom_tile(data = lat_long_tbl_violent, aes(x = long, y = lat, alpha = Frequency),  fill = 'red')
+z<- z + theme(axis.title.y = element_blank(), axis.title.x = element_blank())
+z
+
+ 
+ 
+
+```
